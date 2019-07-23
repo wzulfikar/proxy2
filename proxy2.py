@@ -1,3 +1,5 @@
+#!/usr/bin/env python2
+
 # -*- coding: utf-8 -*-
 import sys
 import os
@@ -32,7 +34,7 @@ class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
 
     def handle_error(self, request, client_address):
         # surpress socket/ssl related errors
-        cls, e = sys.exc_info()[:2]
+        cls, _ = sys.exc_info()[:2]
         if cls is socket.error or cls is ssl.SSLError:
             pass
         else:
@@ -95,7 +97,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         address[1] = int(address[1]) or 443
         try:
             s = socket.create_connection(address, timeout=self.timeout)
-        except Exception as e:
+        except Exception:
             self.send_error(502)
             return
         self.send_response(200, 'Connection Established')
@@ -104,7 +106,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         conns = [self.connection, s]
         self.close_connection = 0
         while not self.close_connection:
-            rlist, wlist, xlist = select.select(conns, [], conns, self.timeout)
+            rlist, _, xlist = select.select(conns, [], conns, self.timeout)
             if xlist or not rlist:
                 break
             for r in rlist:
@@ -170,7 +172,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
                 return
 
             res_body = res.read()
-        except Exception as e:
+        except Exception:
             if origin in self.tls.conns:
                 del self.tls.conns[origin]
             self.send_error(502)
@@ -368,11 +370,19 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
 
 
 def test(HandlerClass=ProxyRequestHandler, ServerClass=ThreadingHTTPServer, protocol="HTTP/1.1"):
-    if sys.argv[1:]:
-        port = int(sys.argv[1])
-    else:
-        port = 8080
-    server_address = ('::1', port)
+    if sys.argv[1:] and sys.argv[1] == "-h":
+        print "usage:"
+        print "proxy2.py [bind address. defaults to ::] [port. defaults to 8080]"
+        print
+        print "example:"
+        print "- start proxy with default options: proxy2.py"
+        print "- start proxy at localhost port 8081: proxy2.py 127.0.0.1 8081"
+        return
+
+    host = sys.argv[1] if sys.argv[1:] else "::"
+    port = int(sys.argv[2]) if sys.argv[2:] else 8080
+    
+    server_address = (host, port)
 
     HandlerClass.protocol_version = protocol
     httpd = ServerClass(server_address, HandlerClass)
